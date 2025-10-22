@@ -3,6 +3,7 @@ import type {
   BlockscoutResponse,
 } from "./blockscout.types.js";
 import type {
+  CreateBlockscoutOptions,
   VerificationProvider,
   VerificationResponse,
   VerificationStatusResponse,
@@ -38,7 +39,17 @@ export class Blockscout implements VerificationProvider {
     | DispatcherOptions;
   public readonly pollingIntervalMs: number;
 
-  constructor(blockscoutConfig: {
+  public static async create({
+    blockExplorerConfig,
+    dispatcher,
+  }: CreateBlockscoutOptions): Promise<Blockscout> {
+    return new Blockscout({
+      ...blockExplorerConfig,
+      dispatcher,
+    });
+  }
+
+  private constructor(blockscoutConfig: {
     name?: string;
     url: string;
     apiUrl: string;

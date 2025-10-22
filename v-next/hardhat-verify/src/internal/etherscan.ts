@@ -3,6 +3,7 @@ import type {
   EtherscanResponse,
 } from "./etherscan.types.js";
 import type {
+  CreateEtherscanOptions,
   VerificationProvider,
   VerificationResponse,
   VerificationStatusResponse,
@@ -26,14 +27,7 @@ import {
 
 export const ETHERSCAN_PROVIDER_NAME: keyof VerificationProvidersConfig =
   "etherscan";
-
 const VERIFICATION_STATUS_POLLING_SECONDS = 3;
-
-// TODO: we need to remove the apiUrl from the chain descriptors in
-// v-next/hardhat/src/internal/builtin-plugins/network-manager/chain-descriptors.ts
-// and use this as the default API URL for Etherscan v2
-// this.apiUrl = etherscanConfig.apiUrl ?? ETHERSCAN_API_URL;
-export const ETHERSCAN_API_URL = "https://api.etherscan.io/v2/api";
 
 export class Etherscan implements VerificationProvider {
   public readonly chainId: string;
@@ -46,18 +40,32 @@ export class Etherscan implements VerificationProvider {
     | DispatcherOptions;
   public readonly pollingIntervalMs: number;
 
-  constructor(etherscanConfig: {
+  public static async create({
+    blockExplorerConfig,
+    verificationProviderConfig,
+    chainId,
+    dispatcher,
+  }: CreateEtherscanOptions): Promise<Etherscan> {
+    return new Etherscan({
+      chainId,
+      ...blockExplorerConfig,
+      apiKey: await verificationProviderConfig.apiKey.get(),
+      dispatcher,
+    });
+  }
+
+  private constructor(etherscanConfig: {
     chainId: number;
     name?: string;
     url: string;
-    apiUrl?: string;
+    apiUrl: string;
     apiKey: string;
     dispatcher?: Dispatcher;
   }) {
     this.chainId = String(etherscanConfig.chainId);
     this.name = etherscanConfig.name ?? "Etherscan";
     this.url = etherscanConfig.url;
-    this.apiUrl = etherscanConfig.apiUrl ?? ETHERSCAN_API_URL;
+    this.apiUrl = etherscanConfig.apiUrl;
 
     const proxyUrl = shouldUseProxy(this.apiUrl)
       ? getProxyUrl(this.apiUrl)

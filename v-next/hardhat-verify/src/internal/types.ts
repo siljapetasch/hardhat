@@ -1,3 +1,10 @@
+import type { Dispatcher } from "@nomicfoundation/hardhat-utils/request";
+import type {
+  BlockExplorerConfig,
+  BlockscoutConfig,
+  EtherscanConfig,
+} from "hardhat/types/config";
+
 export interface VerificationStatusResponse {
   isPending(): boolean;
   isFailure(): boolean;
@@ -10,6 +17,30 @@ export interface VerificationResponse {
   isBytecodeMissingInNetworkError(): boolean;
   isAlreadyVerified(): boolean;
   isOk(): boolean;
+}
+
+export interface CreateBlockscoutOptions {
+  blockExplorerConfig: BlockExplorerConfig;
+  dispatcher?: Dispatcher;
+}
+
+export interface CreateEtherscanOptions {
+  blockExplorerConfig: BlockExplorerConfig;
+  verificationProviderConfig: EtherscanConfig;
+  chainId: number;
+  dispatcher?: Dispatcher;
+}
+
+// Superset that works for all providers used in the factory
+export interface CreateProviderOptions<T = EtherscanConfig | BlockscoutConfig> {
+  blockExplorerConfig: BlockExplorerConfig;
+  verificationProviderConfig: T;
+  chainId: number;
+  dispatcher?: Dispatcher;
+}
+
+export interface VerificationProviderStatic {
+  create(options: CreateProviderOptions): Promise<VerificationProvider>;
 }
 
 export interface VerificationProvider {

@@ -14,7 +14,7 @@ import {
   validateUserConfig,
 } from "../../src/internal/hook-handlers/config.js";
 
-class MockResolvedConfigurationVariable
+export class MockResolvedConfigurationVariable
   implements ResolvedConfigurationVariable
 {
   public _type: "ResolvedConfigurationVariable" =

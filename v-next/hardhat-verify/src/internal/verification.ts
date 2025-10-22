@@ -16,17 +16,17 @@ import { capitalize } from "@nomicfoundation/hardhat-utils/string";
 import { isFullyQualifiedName } from "hardhat/utils/contract-names";
 
 import { getCompilerInput } from "./artifacts.js";
-import { Blockscout, BLOCKSCOUT_PROVIDER_NAME } from "./blockscout.js";
 import { Bytecode } from "./bytecode.js";
 import { getChainDescriptor, getChainId } from "./chains.js";
 import { encodeConstructorArgs } from "./constructor-args.js";
 import { ContractInformationResolver } from "./contract.js";
-import { Etherscan, ETHERSCAN_PROVIDER_NAME } from "./etherscan.js";
+import { ETHERSCAN_PROVIDER_NAME } from "./etherscan.js";
 import { resolveLibraryInformation } from "./libraries.js";
 import {
   filterVersionsByRange,
   resolveSupportedSolcVersions,
 } from "./solc-versions.js";
+import { VERIFICATION_PROVIDERS } from "./verification-providers.js";
 
 export interface VerifyContractArgs {
   address: string;
@@ -292,18 +292,14 @@ ${libraryInformation.undetectableLibraries.map((x) => `  * ${x}`).join("\n")}`
 }
 
 export function validateVerificationProviderName(provider: unknown): void {
-  if (
-    provider !== ETHERSCAN_PROVIDER_NAME &&
-    provider !== BLOCKSCOUT_PROVIDER_NAME
-  ) {
+  if (Object.keys(VERIFICATION_PROVIDERS).indexOf(String(provider)) === -1) {
     throw new HardhatError(
       HardhatError.ERRORS.HARDHAT_VERIFY.VALIDATION.INVALID_VERIFICATION_PROVIDER,
       {
         verificationProvider: String(provider),
-        supportedVerificationProviders: [
-          ETHERSCAN_PROVIDER_NAME,
-          BLOCKSCOUT_PROVIDER_NAME,
-        ].join(", "),
+        supportedVerificationProviders: Object.keys(
+          VERIFICATION_PROVIDERS,
+        ).join(", "),
       },
     );
   }
@@ -365,20 +361,16 @@ async function createVerificationProviderInstance({
     );
   }
 
-  const commonOptions = {
-    ...chainDescriptor.blockExplorers[verificationProviderName],
+  const ProviderClass = VERIFICATION_PROVIDERS[verificationProviderName];
+
+  return ProviderClass.create({
+    blockExplorerConfig:
+      chainDescriptor.blockExplorers[verificationProviderName],
+    verificationProviderConfig:
+      verificationProvidersConfig[verificationProviderName],
+    chainId,
     dispatcher,
-  };
-
-  if (verificationProviderName === "etherscan") {
-    return new Etherscan({
-      ...commonOptions,
-      chainId,
-      apiKey: await verificationProvidersConfig.etherscan.apiKey.get(),
-    });
-  }
-
-  return new Blockscout(commonOptions);
+  });
 }
 
 async function attemptVerification(

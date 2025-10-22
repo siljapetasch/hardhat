@@ -3,26 +3,31 @@ import querystring from "node:querystring";
 import { beforeEach, describe, it } from "node:test";
 
 import { HardhatError } from "@nomicfoundation/hardhat-errors";
-import {
-  assertRejectsWithHardhatError,
-  assertThrowsHardhatError,
-} from "@nomicfoundation/hardhat-test-utils";
+import { assertRejectsWithHardhatError } from "@nomicfoundation/hardhat-test-utils";
 import { getDispatcher } from "@nomicfoundation/hardhat-utils/request";
 
-import { Etherscan, ETHERSCAN_API_URL } from "../src/internal/etherscan.js";
+import { Etherscan } from "../src/internal/etherscan.js";
 
+import { MockResolvedConfigurationVariable } from "./hook-handlers/config.js";
 import { initializeTestDispatcher } from "./utils.js";
 
 describe("etherscan", () => {
   describe("Etherscan class", async () => {
+    const apiKey = "someApiKey";
     const etherscanConfig = {
       chainId: 11_155_111,
-      name: "SepoliaScan",
-      url: "http://localhost",
-      apiUrl: "http://localhost/v2/api",
-      apiKey: "someApiKey",
+      blockExplorerConfig: {
+        name: "SepoliaScan",
+        url: "http://localhost",
+        apiUrl: "http://localhost/v2/api",
+      },
+      verificationProviderConfig: {
+        enabled: true,
+        apiKey: new MockResolvedConfigurationVariable(apiKey),
+      },
     };
-    const etherscanApiUrl = new URL(etherscanConfig.apiUrl).origin;
+    const etherscanApiUrl = new URL(etherscanConfig.blockExplorerConfig.apiUrl)
+      .origin;
     const address = "0x1234567890abcdef1234567890abcdef12345678";
     const contract = "contracts/Test.sol:Test";
     const sourceCode =
@@ -32,54 +37,57 @@ describe("etherscan", () => {
     const guid = "a7lpxkm9kpcpicx7daftmjifrfhiuhf5vqqnawhkfhzfrcpnxj";
 
     describe("constructor", () => {
-      it("should create an instance with the correct properties", () => {
-        const etherscan = new Etherscan(etherscanConfig);
+      it("should create an instance with the correct properties", async () => {
+        const etherscan = await Etherscan.create(etherscanConfig);
 
         assert.equal(etherscan.chainId, "11155111");
-        assert.equal(etherscan.name, etherscanConfig.name);
-        assert.equal(etherscan.url, etherscanConfig.url);
-        assert.equal(etherscan.apiUrl, etherscanConfig.apiUrl);
-        assert.equal(etherscan.apiKey, etherscanConfig.apiKey);
+        assert.equal(etherscan.name, etherscanConfig.blockExplorerConfig.name);
+        assert.equal(etherscan.url, etherscanConfig.blockExplorerConfig.url);
+        assert.equal(
+          etherscan.apiUrl,
+          etherscanConfig.blockExplorerConfig.apiUrl,
+        );
+        assert.equal(etherscan.apiKey, apiKey);
       });
 
-      it('should default to "Etherscan" if no name is provided', () => {
-        const etherscan = new Etherscan({
+      it('should default to "Etherscan" if no name is provided', async () => {
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
-          name: undefined,
+          blockExplorerConfig: {
+            ...etherscanConfig.blockExplorerConfig,
+            name: undefined,
+          },
         });
 
         assert.equal(etherscan.name, "Etherscan");
       });
 
-      it("should default to etherscan api if no apiUrl is provided", () => {
-        const etherscan = new Etherscan({
-          ...etherscanConfig,
-          apiUrl: undefined,
-        });
-
-        assert.equal(etherscan.apiUrl, ETHERSCAN_API_URL);
-      });
-
-      it("should throw an error if the apiKey is empty", () => {
-        assertThrowsHardhatError(
-          () =>
-            new Etherscan({
-              ...etherscanConfig,
-              apiKey: "",
-            }),
+      it("should throw an error if the apiKey is empty", async () => {
+        await assertRejectsWithHardhatError(
+          Etherscan.create({
+            ...etherscanConfig,
+            verificationProviderConfig: {
+              ...etherscanConfig.verificationProviderConfig,
+              apiKey: new MockResolvedConfigurationVariable(""),
+            },
+          }),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_API_KEY_EMPTY,
           {
-            verificationProvider: etherscanConfig.name,
+            verificationProvider: etherscanConfig.blockExplorerConfig.name,
           },
         );
       });
 
-      it("should configure proxy when no dispatcher provided and proxy environment variables are set", () => {
+      it("should configure proxy when no dispatcher provided and proxy environment variables are set", async () => {
         process.env.https_proxy = "http://test-proxy:8080";
 
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
-          apiUrl: ETHERSCAN_API_URL,
+          blockExplorerConfig: {
+            ...etherscanConfig.blockExplorerConfig,
+            // set the apiUrl to something different from localhost to trigger proxy usage
+            apiUrl: "https://api.etherscan.io/v2/api",
+          },
         });
 
         assert.deepEqual(etherscan.dispatcherOrDispatcherOptions, {
@@ -89,11 +97,11 @@ describe("etherscan", () => {
         delete process.env.https_proxy;
       });
 
-      it("should not configure proxy when shouldUseProxy returns false", () => {
+      it("should not configure proxy when shouldUseProxy returns false", async () => {
         process.env.https_proxy = "http://test-proxy:8080";
         process.env.NO_PROXY = "*";
 
-        const etherscan = new Etherscan(etherscanConfig);
+        const etherscan = await Etherscan.create(etherscanConfig);
 
         assert.deepEqual(etherscan.dispatcherOrDispatcherOptions, {});
 
@@ -105,7 +113,7 @@ describe("etherscan", () => {
         process.env.https_proxy = "http://test-proxy:8080";
         const dispatcher = await getDispatcher(etherscanApiUrl);
 
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher,
         });
@@ -115,19 +123,19 @@ describe("etherscan", () => {
         delete process.env.https_proxy;
       });
 
-      it("should configure no proxy when no environment variables are set", () => {
-        const etherscan = new Etherscan(etherscanConfig);
+      it("should configure no proxy when no environment variables are set", async () => {
+        const etherscan = await Etherscan.create(etherscanConfig);
 
         assert.deepEqual(etherscan.dispatcherOrDispatcherOptions, {});
       });
     });
 
     describe("getContractUrl", () => {
-      it("should return the contract url", () => {
-        const etherscan = new Etherscan(etherscanConfig);
+      it("should return the contract url", async () => {
+        const etherscan = await Etherscan.create(etherscanConfig);
         assert.equal(
           etherscan.getContractUrl(address),
-          `${etherscanConfig.url}/address/${address}#code`,
+          `${etherscanConfig.blockExplorerConfig.url}/address/${address}#code`,
         );
       });
     });
@@ -148,14 +156,14 @@ describe("etherscan", () => {
             module: "contract",
             action: "getsourcecode",
             chainid: String(etherscanConfig.chainId),
-            apikey: etherscanConfig.apiKey,
+            apikey: apiKey,
             address,
           },
         });
       });
 
       it("should return true if the contract is verified", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -180,7 +188,7 @@ describe("etherscan", () => {
       });
 
       it("should return false if the contract is not verified", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -217,7 +225,7 @@ describe("etherscan", () => {
       });
 
       it("should throw an error if the request fails", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -229,8 +237,8 @@ describe("etherscan", () => {
           etherscan.isVerified(address),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             errorMessage: "Network error",
           },
         );
@@ -242,8 +250,8 @@ describe("etherscan", () => {
           etherscan.isVerified(address),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             // this message comes from ResponseStatusCodeError in hardhat-utils
             errorMessage: "Response status code 400: Bad Request",
           },
@@ -256,15 +264,15 @@ describe("etherscan", () => {
           etherscan.isVerified(address),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             errorMessage: `Unexpected token 'I', "Invalid js"... is not valid JSON`,
           },
         );
       });
 
       it("should throw an error if the response status code is 300-399", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -276,8 +284,8 @@ describe("etherscan", () => {
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL
             .EXPLORER_REQUEST_STATUS_CODE_ERROR,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             statusCode: 300,
             errorMessage: "Redirection error",
           },
@@ -301,7 +309,7 @@ describe("etherscan", () => {
             module: "contract",
             action: "verifysourcecode",
             chainid: String(etherscanConfig.chainId),
-            apikey: etherscanConfig.apiKey,
+            apikey: apiKey,
           },
           body: querystring.stringify({
             contractaddress: address,
@@ -315,7 +323,7 @@ describe("etherscan", () => {
       });
 
       it("should return a guid if the verification request was submitted successfully", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -343,7 +351,7 @@ describe("etherscan", () => {
       });
 
       it("should throw an error if the request fails", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -361,8 +369,8 @@ describe("etherscan", () => {
           ),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             errorMessage: "Network error",
           },
         );
@@ -380,8 +388,8 @@ describe("etherscan", () => {
           ),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             // this message comes from ResponseStatusCodeError in hardhat-utils
             errorMessage: "Response status code 400: Bad Request",
           },
@@ -400,15 +408,15 @@ describe("etherscan", () => {
           ),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             errorMessage: `Unexpected token 'I', "Invalid js"... is not valid JSON`,
           },
         );
       });
 
       it("should throw an error if the response status code is 300-399", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -426,8 +434,8 @@ describe("etherscan", () => {
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL
             .EXPLORER_REQUEST_STATUS_CODE_ERROR,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             statusCode: 300,
             errorMessage: "Redirection error",
           },
@@ -435,7 +443,7 @@ describe("etherscan", () => {
       });
 
       it("should throw an error if Etherscan is unable to locate the contract", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -455,14 +463,14 @@ describe("etherscan", () => {
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL
             .CONTRACT_VERIFICATION_MISSING_BYTECODE,
           {
-            url: etherscanConfig.apiUrl,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             address,
           },
         );
       });
 
       it("should throw an error if the contract is already verified", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -507,7 +515,7 @@ describe("etherscan", () => {
       });
 
       it("should throw an error if the etherscan response status is not 1", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -549,14 +557,14 @@ describe("etherscan", () => {
               module: "contract",
               action: "checkverifystatus",
               chainid: String(etherscanConfig.chainId),
-              apikey: etherscanConfig.apiKey,
+              apikey: apiKey,
               guid,
             },
           });
       });
 
       it("should return the verification status", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -600,7 +608,7 @@ describe("etherscan", () => {
       });
 
       it("should poll the verification status until it is successful or fails", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -640,7 +648,7 @@ describe("etherscan", () => {
       });
 
       it("should throw an error if the request fails", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -654,8 +662,8 @@ describe("etherscan", () => {
           etherscan.pollVerificationStatus(guid, address, contract),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             errorMessage: "Network error",
           },
         );
@@ -667,8 +675,8 @@ describe("etherscan", () => {
           etherscan.pollVerificationStatus(guid, address, contract),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             // this message comes from ResponseStatusCodeError in hardhat-utils
             errorMessage: "Response status code 400: Bad Request",
           },
@@ -681,15 +689,15 @@ describe("etherscan", () => {
           etherscan.pollVerificationStatus(guid, address, contract),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             errorMessage: `Unexpected token 'I', "Invalid js"... is not valid JSON`,
           },
         );
       });
 
       it("should throw an error if the response status code is 300-399", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -703,8 +711,8 @@ describe("etherscan", () => {
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL
             .EXPLORER_REQUEST_STATUS_CODE_ERROR,
           {
-            name: etherscanConfig.name,
-            url: etherscanConfig.apiUrl,
+            name: etherscanConfig.blockExplorerConfig.name,
+            url: etherscanConfig.blockExplorerConfig.apiUrl,
             statusCode: 300,
             errorMessage: "Redirection error",
           },
@@ -712,7 +720,7 @@ describe("etherscan", () => {
       });
 
       it("should throw an error if the contract is already verified", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -745,7 +753,7 @@ describe("etherscan", () => {
       });
 
       it("should throw an error if the etherscan response status is not 1", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });
@@ -764,7 +772,7 @@ describe("etherscan", () => {
       });
 
       it("should throw an error if the etherscan response result is not 'Pass - Verified' or 'Fail - Unable to verify'", async () => {
-        const etherscan = new Etherscan({
+        const etherscan = await Etherscan.create({
           ...etherscanConfig,
           dispatcher: testDispatcher.interceptable,
         });

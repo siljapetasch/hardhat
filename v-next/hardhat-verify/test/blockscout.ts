@@ -12,12 +12,12 @@ import { initializeTestDispatcher } from "./utils.js";
 
 describe("blockscout", () => {
   describe("Blockscout class", async () => {
-    const blockscoutConfig = {
+    const blockExplorerConfig = {
       name: "SepoliaScout",
       url: "http://localhost",
       apiUrl: "https://api.localhost/api",
     };
-    const blockscoutApiUrl = new URL(blockscoutConfig.apiUrl).origin;
+    const blockscoutApiUrl = new URL(blockExplorerConfig.apiUrl).origin;
     const address = "0x1234567890abcdef1234567890abcdef12345678";
     const contract = "contracts/Test.sol:Test";
     const sourceCode =
@@ -27,27 +27,30 @@ describe("blockscout", () => {
     const guid = "a7lpxkm9kpcpicx7daftmjifrfhiuhf5vqqnawhkfhzfrcpnxj";
 
     describe("constructor", () => {
-      it("should create an instance with the correct properties", () => {
-        const blockscout = new Blockscout(blockscoutConfig);
+      it("should create an instance with the correct properties", async () => {
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
+        });
 
-        assert.equal(blockscout.name, blockscoutConfig.name);
-        assert.equal(blockscout.url, blockscoutConfig.url);
-        assert.equal(blockscout.apiUrl, blockscoutConfig.apiUrl);
+        assert.equal(blockscout.name, blockExplorerConfig.name);
+        assert.equal(blockscout.url, blockExplorerConfig.url);
+        assert.equal(blockscout.apiUrl, blockExplorerConfig.apiUrl);
       });
 
-      it('should default to "Blockscout" if no name is provided', () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
-          name: undefined,
+      it('should default to "Blockscout" if no name is provided', async () => {
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig: { ...blockExplorerConfig, name: undefined },
         });
 
         assert.equal(blockscout.name, "Blockscout");
       });
 
-      it("should configure proxy when no dispatcher provided and proxy environment variables are set", () => {
+      it("should configure proxy when no dispatcher provided and proxy environment variables are set", async () => {
         process.env.https_proxy = "http://test-proxy:8080";
 
-        const blockscout = new Blockscout(blockscoutConfig);
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
+        });
 
         assert.deepEqual(blockscout.dispatcherOrDispatcherOptions, {
           proxy: "http://test-proxy:8080",
@@ -56,11 +59,13 @@ describe("blockscout", () => {
         delete process.env.https_proxy;
       });
 
-      it("should not configure proxy when shouldUseProxy returns false", () => {
+      it("should not configure proxy when shouldUseProxy returns false", async () => {
         process.env.https_proxy = "http://test-proxy:8080";
         process.env.NO_PROXY = "*";
 
-        const blockscout = new Blockscout(blockscoutConfig);
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
+        });
 
         assert.deepEqual(blockscout.dispatcherOrDispatcherOptions, {});
 
@@ -72,8 +77,8 @@ describe("blockscout", () => {
         process.env.https_proxy = "http://test-proxy:8080";
         const dispatcher = await getDispatcher(blockscoutApiUrl);
 
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher,
         });
 
@@ -82,19 +87,23 @@ describe("blockscout", () => {
         delete process.env.https_proxy;
       });
 
-      it("should configure no proxy when no environment variables are set", () => {
-        const blockscout = new Blockscout(blockscoutConfig);
+      it("should configure no proxy when no environment variables are set", async () => {
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
+        });
 
         assert.deepEqual(blockscout.dispatcherOrDispatcherOptions, {});
       });
     });
 
     describe("getContractUrl", () => {
-      it("should return the contract url", () => {
-        const blockscout = new Blockscout(blockscoutConfig);
+      it("should return the contract url", async () => {
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
+        });
         assert.equal(
           blockscout.getContractUrl(address),
-          `${blockscoutConfig.url}/address/${address}#code`,
+          `${blockExplorerConfig.url}/address/${address}#code`,
         );
       });
     });
@@ -120,8 +129,8 @@ describe("blockscout", () => {
       });
 
       it("should return true if the contract is verified", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -145,8 +154,8 @@ describe("blockscout", () => {
       });
 
       it("should return false if the contract is not verified", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -182,8 +191,8 @@ describe("blockscout", () => {
       });
 
       it("should throw an error if the request fails", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -194,8 +203,8 @@ describe("blockscout", () => {
           blockscout.isVerified(address),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             errorMessage: "Network error",
           },
         );
@@ -207,8 +216,8 @@ describe("blockscout", () => {
           blockscout.isVerified(address),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             // this message comes from ResponseStatusCodeError in hardhat-utils
             errorMessage: "Response status code 400: Bad Request",
           },
@@ -221,16 +230,16 @@ describe("blockscout", () => {
           blockscout.isVerified(address),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             errorMessage: `Unexpected token 'I', "Invalid js"... is not valid JSON`,
           },
         );
       });
 
       it("should throw an error if the response status code is 300-399", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -241,8 +250,8 @@ describe("blockscout", () => {
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL
             .EXPLORER_REQUEST_STATUS_CODE_ERROR,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             statusCode: 300,
             errorMessage: "Redirection error",
           },
@@ -278,8 +287,8 @@ describe("blockscout", () => {
       });
 
       it("should return a guid if the verification request was submitted successfully", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -306,8 +315,8 @@ describe("blockscout", () => {
       });
 
       it("should throw an error if the request fails", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -324,8 +333,8 @@ describe("blockscout", () => {
           ),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             errorMessage: "Network error",
           },
         );
@@ -343,8 +352,8 @@ describe("blockscout", () => {
           ),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             // this message comes from ResponseStatusCodeError in hardhat-utils
             errorMessage: "Response status code 400: Bad Request",
           },
@@ -363,16 +372,16 @@ describe("blockscout", () => {
           ),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             errorMessage: `Unexpected token 'I', "Invalid js"... is not valid JSON`,
           },
         );
       });
 
       it("should throw an error if the response status code is 300-399", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -389,8 +398,8 @@ describe("blockscout", () => {
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL
             .EXPLORER_REQUEST_STATUS_CODE_ERROR,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             statusCode: 300,
             errorMessage: "Redirection error",
           },
@@ -398,8 +407,8 @@ describe("blockscout", () => {
       });
 
       it("should throw an error if Blockscout is unable to locate the contract", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -418,15 +427,15 @@ describe("blockscout", () => {
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL
             .CONTRACT_VERIFICATION_MISSING_BYTECODE,
           {
-            url: blockscoutConfig.apiUrl,
+            url: blockExplorerConfig.apiUrl,
             address,
           },
         );
       });
 
       it("should throw an error if the contract is already verified", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -451,8 +460,8 @@ describe("blockscout", () => {
       });
 
       it("should throw an error if the address does not contain a contract", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -470,15 +479,15 @@ describe("blockscout", () => {
           ),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.ADDRESS_NOT_A_CONTRACT,
           {
-            verificationProvider: blockscoutConfig.name,
+            verificationProvider: blockExplorerConfig.name,
             address,
           },
         );
       });
 
       it("should throw an error if the blockscout response status is not 1", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -524,8 +533,8 @@ describe("blockscout", () => {
       });
 
       it("should return the verification status", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -568,8 +577,8 @@ describe("blockscout", () => {
       });
 
       it("should poll the verification status until it is successful or fails", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -608,8 +617,8 @@ describe("blockscout", () => {
       });
 
       it("should throw an error if the request fails", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -622,8 +631,8 @@ describe("blockscout", () => {
           blockscout.pollVerificationStatus(guid, address, contract),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             errorMessage: "Network error",
           },
         );
@@ -635,8 +644,8 @@ describe("blockscout", () => {
           blockscout.pollVerificationStatus(guid, address, contract),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             // this message comes from ResponseStatusCodeError in hardhat-utils
             errorMessage: "Response status code 400: Bad Request",
           },
@@ -649,16 +658,16 @@ describe("blockscout", () => {
           blockscout.pollVerificationStatus(guid, address, contract),
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL.EXPLORER_REQUEST_FAILED,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             errorMessage: `Unexpected token 'I', "Invalid js"... is not valid JSON`,
           },
         );
       });
 
       it("should throw an error if the response status code is 300-399", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -671,8 +680,8 @@ describe("blockscout", () => {
           HardhatError.ERRORS.HARDHAT_VERIFY.GENERAL
             .EXPLORER_REQUEST_STATUS_CODE_ERROR,
           {
-            name: blockscoutConfig.name,
-            url: blockscoutConfig.apiUrl,
+            name: blockExplorerConfig.name,
+            url: blockExplorerConfig.apiUrl,
             statusCode: 300,
             errorMessage: "Redirection error",
           },
@@ -680,8 +689,8 @@ describe("blockscout", () => {
       });
 
       it("should throw an error if the contract is already verified", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -700,8 +709,8 @@ describe("blockscout", () => {
       });
 
       it("should throw an error if the blockscout response status is not 1", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 
@@ -719,8 +728,8 @@ describe("blockscout", () => {
       });
 
       it("should throw an error if the blockscout response result is not 'Pass - Verified' or 'Fail - Unable to verify'", async () => {
-        const blockscout = new Blockscout({
-          ...blockscoutConfig,
+        const blockscout = await Blockscout.create({
+          blockExplorerConfig,
           dispatcher: testDispatcher.interceptable,
         });
 

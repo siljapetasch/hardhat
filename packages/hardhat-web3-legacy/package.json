@@ -1,6 +1,6 @@
 {
   "name": "@nomiclabs/hardhat-web3-legacy",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "author": "Nomic Labs LLC",
   "license": "MIT",
   "homepage": "https://github.com/nomiclabs/hardhat/tree/main/packages/hardhat-web3-legacy",
@@ -51,7 +51,7 @@
     "eslint-plugin-import": "2.27.5",
     "eslint-plugin-mocha": "10.4.1",
     "eslint-plugin-prettier": "3.4.0",
-    "hardhat": "workspace:^2.26.0",
+    "hardhat": "workspace:^2.26.5",
     "mocha": "^10.0.0",
     "prettier": "2.4.1",
     "rimraf": "^3.0.2",
@@ -60,7 +60,7 @@
     "web3": "^0.20.0"
   },
   "peerDependencies": {
-    "hardhat": "workspace:^2.26.0",
+    "hardhat": "workspace:^2.26.5",
     "web3": "^0.20.0"
   }
 }
